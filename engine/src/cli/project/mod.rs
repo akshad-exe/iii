@@ -280,7 +280,6 @@ async fn run_init_with_template(args: InitArgs) -> i32 {
         directory: target_dir.clone(),
         languages: None,
         skip_tool_check: args.skip_iii,
-        skip_install: false,
         // --learn-iii prints its own "starting the tour" line right after.
         skip_next_steps: args.learn_iii,
         yes: false,

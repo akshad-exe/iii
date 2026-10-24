@@ -4,9 +4,8 @@
 // This software is patent protected. We welcome discussions - reach out at team@iii.dev
 // See LICENSE and PATENTS files for details.
 
-//! Shared scaffolding helpers used by both `iii project init` (engine) and
-//! `iii worker init` (iii-worker crate). Keeping these in one place prevents
-//! the dotfile-exemption and `data/`-filter rules from drifting.
+//! Scaffolding helpers for `iii project init` (engine): the dotfile-exemption
+//! and `data/`-filter rules for the target directory.
 
 use crate::{IiiConfig, ProductConfig, TemplateFetcher, copy_template};
 use colored::Colorize;
@@ -34,8 +33,7 @@ pub fn resolve_root(dir: Option<&str>) -> Result<PathBuf, String> {
 /// scaffold (an existing `data/` belongs to some engine and clobbering its
 /// project would orphan that state).
 ///
-/// `marker_file` lets each caller specify its own marker: project init uses
-/// `"project.ini"`, worker init uses `"worker.ini"`.
+/// `marker_file` names the marker; project init uses `"project.ini"`.
 pub fn check_directory_state(
     root: &Path,
     allow_non_empty: bool,
