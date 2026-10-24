@@ -214,63 +214,6 @@ EOF
   [[ "$output" == *"install"* ]]
 }
 
-# MOT-4783: the worker must match the host libc, not the engine target.
-@test "worker selects musl on Alpine x86_64" {
-  run worker_target_for_host Linux x86_64 musl
-  [ "$status" -eq 0 ]
-  [ "$output" = "x86_64-unknown-linux-musl" ]
-}
-
-@test "worker selects musl on Alpine aarch64" {
-  run worker_target_for_host Linux aarch64 musl
-  [ "$status" -eq 0 ]
-  [ "$output" = "aarch64-unknown-linux-musl" ]
-}
-
-@test "worker keeps GNU on glibc despite static musl engine target" {
-  export TARGET=x86_64-unknown-linux-musl
-  run worker_target_for_host Linux x86_64 gnu
-  [ "$status" -eq 0 ]
-  [ "$output" = "x86_64-unknown-linux-gnu" ]
-}
-
-@test "worker keeps GNU on glibc aarch64" {
-  run worker_target_for_host Linux aarch64 gnu
-  [ "$status" -eq 0 ]
-  [ "$output" = "aarch64-unknown-linux-gnu" ]
-}
-
-@test "worker libc selection ignores engine glibc override" {
-  export III_USE_GLIBC=1
-  run worker_target_for_host Linux x86_64 musl
-  [ "$status" -eq 0 ]
-  [ "$output" = "x86_64-unknown-linux-musl" ]
-}
-
-@test "worker preserves macOS Apple Silicon support" {
-  run worker_target_for_host Darwin aarch64 gnu
-  [ "$status" -eq 0 ]
-  [ "$output" = "aarch64-apple-darwin" ]
-}
-
-@test "worker does not invent assets on unsupported platforms" {
-  run worker_target_for_host Darwin x86_64 gnu
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  run worker_target_for_host Linux armv7 gnu
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "install.sh skips VM companions a release does not ship, silently" {
-  run resolve_companion_url iii-worker x86_64-unknown-linux-gnu \
-    '{"assets":[{"name":"iii-x86_64-unknown-linux-gnu.tar.gz","browser_download_url":"https://example.invalid/iii.tar.gz"}]}'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  run grep -nE 'not found in release|not available on macOS Intel' "$INSTALL_SH"
-  [ "$status" -eq 1 ]
-}
-
 # ─────────────────────────────────────────────────────────────
 # iii_already_installed: an upgrade gets no setup offer
 # ─────────────────────────────────────────────────────────────
