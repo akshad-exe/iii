@@ -231,7 +231,8 @@ iii trigger -n dev compose::down file=worker-compose.yaml
 ```
 
 Use `engine::workers::list` for live registrations and `compose::status` for the supervisor's
-process state. `worker::*` is the sandbox adapter's surface, and only Compose calls it. Use
+process state. `<adapter>::worker::*` (for example `sandbox-builtin::worker::*`) is the sandbox
+adapter's surface, and only Compose calls it. Use
 `compose::logs` for raw worker stdout and stderr.
 
 ## Discovery surface
@@ -270,6 +271,7 @@ view; consult both when diagnosing a declared container that did not register.
 ## Boundaries
 
 - Do not put project workers in `config.yaml`; use `worker-compose.yaml`.
-- Do not call `worker::*` functions: they are the sandbox adapter's surface, and only Compose calls them.
+- Do not call `<adapter>::worker::*` functions such as `sandbox-builtin::worker::start`: they are the
+  sandbox adapter's surface, and only Compose calls them.
 - Do not add registry packages of kind `engine` as Compose roots; the engine supplies them.
 - Treat function ids and trigger schemas from the live engine as authoritative.
