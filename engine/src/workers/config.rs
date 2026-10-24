@@ -444,13 +444,13 @@ fn builtin_worker_description(worker_type: &str) -> Option<&'static str> {
 pub(crate) fn runtime_worker_info_from_registration(
     entry: &WorkerEntry,
     registrations: &super::reload::WorkerRegistrations,
-) -> Option<crate::worker_connections::RuntimeWorkerInfo> {
+) -> crate::worker_connections::RuntimeWorkerInfo {
     let worker_type = entry.worker_type().to_string();
     let mut function_ids = registrations.function_ids.clone();
     function_ids.sort();
     function_ids.dedup();
 
-    Some(crate::worker_connections::RuntimeWorkerInfo {
+    crate::worker_connections::RuntimeWorkerInfo {
         id: entry.name.clone(),
         name: worker_type.clone(),
         description: builtin_worker_description(&worker_type).map(|s| s.to_string()),
@@ -458,7 +458,7 @@ pub(crate) fn runtime_worker_info_from_registration(
         connected_at: chrono::Utc::now(),
         function_ids,
         internal: mandatory_worker_names().contains(worker_type.as_str()),
-    })
+    }
 }
 
 fn remove_runtime_worker_after_start_failure(engine: &Engine, rw: &super::reload::RunningWorker) {
@@ -665,11 +665,11 @@ impl EngineBuilder {
             let (shutdown_tx, _) = tokio::sync::watch::channel(false);
             let worker_arc: Arc<dyn Worker> = Arc::from(worker);
 
-            if let Some(runtime_worker) =
-                runtime_worker_info_from_registration(&entry, &registrations)
-            {
-                self.engine.upsert_runtime_worker(runtime_worker);
-            }
+            self.engine
+                .upsert_runtime_worker(runtime_worker_info_from_registration(
+                    &entry,
+                    &registrations,
+                ));
 
             self.running.push(super::reload::RunningWorker {
                 entry,
@@ -723,15 +723,11 @@ impl EngineBuilder {
             }
         }
 
-        // Any worker entry whose value is already persisted in the
-        // configuration store has a redundant `config:` block in config.yaml.
-        // This covers built-in workers (which seed during the boot loop above,
-        // so their value is in the store by now) AND external workers like
-        // `shell` that register over the bus — an external worker's block is
-        // stripped on the first boot AFTER it persisted its value. Strip the
-        // block (keeping the `- name:` entry) and null the matching in-memory
-        // entry so a later reload's diff sees no change and doesn't needlessly
-        // restart the worker. Done before the watcher below exists, so these
+        // A built-in worker seeds its value into the configuration store during
+        // the boot loop above, after which its `config:` block in config.yaml
+        // is redundant. Strip the block (keeping the `- name:` entry) and null
+        // the matching in-memory entry so a later reload's diff sees no change
+        // and doesn't needlessly restart the worker. Done before the watcher below exists, so these
         // self-writes never trigger a reload.
         if let Some(ref path) = config_path {
             use crate::engine::EngineTrait;
