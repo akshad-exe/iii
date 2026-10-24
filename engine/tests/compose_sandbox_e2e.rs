@@ -56,8 +56,8 @@ fn iii_bin() -> Command {
     command
 }
 
-/// A process from `ps`. It has no `Debug`: a `__vm-boot` command line carries
-/// the guest environment, which a failed assertion must not print.
+/// A process from `ps`. It has no `Debug`: `ps` lists every process on the
+/// host, and a failed assertion must not print their command lines.
 struct Proc {
     pid: u32,
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -84,9 +84,10 @@ fn processes() -> Vec<Proc> {
         .collect()
 }
 
-/// This test's `__vm-boot` processes. Their command line carries the private
-/// `HOME` (the adapter's package cache and the inherited host environment), so
-/// its unique directory name picks them out from any other VM on the host.
+/// This test's `__vm-boot` processes. Their command line names paths under the
+/// private `HOME` (the adapter binary in the package cache and the VM state
+/// dir), so its unique directory name picks them out from any other VM on the
+/// host.
 fn vm_boots(home: &Path) -> Vec<Proc> {
     let tag = home
         .file_name()
