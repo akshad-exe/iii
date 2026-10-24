@@ -385,6 +385,7 @@ async fn up_scoped(
                         error.code(),
                         &strip_container_prefix(&error.to_string(), key),
                     );
+                    record_start_failure(records, key, &error);
                     results.push(ContainerResult {
                         container: key.clone(),
                         state: ChildStatus::Failed,
@@ -471,6 +472,27 @@ fn is_required(file: &ComposeFile, key: &str) -> bool {
 fn strip_container_prefix(message: &str, container: &str) -> String {
     let prefix = format!("container '{container}': ");
     message.strip_prefix(&prefix).unwrap_or(message).to_string()
+}
+
+/// A start that never registered leaves no child, so only its record keeps
+/// `compose::status` from reading the failure as a stop.
+fn record_start_failure(
+    records: &mut BTreeMap<String, ChildRecord>,
+    key: &str,
+    error: &ComposeError,
+) {
+    let record = records
+        .entry(key.to_string())
+        .or_insert_with(|| ChildRecord {
+            pid: None,
+            birth: None,
+            vm: None,
+            status: ChildStatus::Failed,
+            started_at: crate::state::now_unix(),
+            last_error: None,
+        });
+    record.status = ChildStatus::Failed;
+    record.last_error = Some(error.to_string());
 }
 
 /// Stops one container and starts it again, touching nothing else.
@@ -649,6 +671,7 @@ async fn restart_one_scoped(
                 error.code(),
                 &strip_container_prefix(&error.to_string(), key),
             );
+            record_start_failure(records, key, &error);
             report::plan_done();
             let required = is_required(ctx.file, key);
             if required {
