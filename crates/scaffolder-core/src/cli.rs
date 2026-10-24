@@ -26,26 +26,20 @@ pub fn resolve_root(dir: Option<&str>) -> Result<PathBuf, String> {
 
 /// Reject scaffolding into a non-empty directory unless the user opted in via
 /// `allow_non_empty`, OR the directory is already initialized (detected by
-/// the presence of `.iii/<marker_file>`).
+/// the presence of `.iii/project.ini`).
 ///
 /// Hidden dotfiles (`.git/`, `.gitignore`, etc.) are not considered "user
 /// content"; anything else, including a `data/` directory, blocks the
 /// scaffold (an existing `data/` belongs to some engine and clobbering its
 /// project would orphan that state).
-///
-/// `marker_file` names the marker; project init uses `"project.ini"`.
-pub fn check_directory_state(
-    root: &Path,
-    allow_non_empty: bool,
-    marker_file: &str,
-) -> Result<(), String> {
+pub fn check_directory_state(root: &Path, allow_non_empty: bool) -> Result<(), String> {
     if !root.exists() {
         return Ok(());
     }
     if !root.is_dir() {
         return Err(format!("{} exists but is not a directory", root.display()));
     }
-    if root.join(".iii").join(marker_file).exists() {
+    if root.join(".iii").join("project.ini").exists() {
         return Ok(());
     }
     if allow_non_empty {

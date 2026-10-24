@@ -23,14 +23,14 @@ fn resolve_root_accepts_explicit_path() {
 #[test]
 fn check_directory_state_passes_for_empty_dir() {
     let dir = tempdir().unwrap();
-    assert!(check_directory_state(dir.path(), false, "project.ini").is_ok());
+    assert!(check_directory_state(dir.path(), false).is_ok());
 }
 
 #[test]
 fn check_directory_state_allows_dotfiles() {
     let dir = tempdir().unwrap();
     fs::create_dir(dir.path().join(".git")).unwrap();
-    assert!(check_directory_state(dir.path(), false, "project.ini").is_ok());
+    assert!(check_directory_state(dir.path(), false).is_ok());
 }
 
 #[test]
@@ -39,14 +39,14 @@ fn check_directory_state_rejects_data_dir_without_flag() {
     // orphan that engine's project. It must NOT be exempt like dotfiles.
     let dir = tempdir().unwrap();
     fs::create_dir(dir.path().join("data")).unwrap();
-    assert!(check_directory_state(dir.path(), false, "project.ini").is_err());
+    assert!(check_directory_state(dir.path(), false).is_err());
 }
 
 #[test]
 fn check_directory_state_rejects_user_files_without_flag() {
     let dir = tempdir().unwrap();
     fs::write(dir.path().join("user.txt"), "x").unwrap();
-    assert!(check_directory_state(dir.path(), false, "project.ini").is_err());
+    assert!(check_directory_state(dir.path(), false).is_err());
 }
 
 #[test]
@@ -55,9 +55,9 @@ fn check_directory_state_passes_when_marker_file_present() {
     fs::create_dir(dir.path().join(".iii")).unwrap();
     fs::write(
         dir.path().join(".iii").join("project.ini"),
-        "[worker]\nworker_id=x\n",
+        "[project]\nproject_id=x\n",
     )
     .unwrap();
     fs::write(dir.path().join("user.txt"), "x").unwrap();
-    assert!(check_directory_state(dir.path(), false, "project.ini").is_ok());
+    assert!(check_directory_state(dir.path(), false).is_ok());
 }

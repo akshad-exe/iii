@@ -149,7 +149,7 @@ async fn run_init(args: InitArgs) -> i32 {
         return code;
     }
 
-    if let Err(e) = check_directory_state(&root, args.allow_non_empty, "project.ini") {
+    if let Err(e) = check_directory_state(&root, args.allow_non_empty) {
         let code = print_err(
             "target directory is not empty",
             &e,
