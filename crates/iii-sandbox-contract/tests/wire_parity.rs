@@ -233,9 +233,29 @@ fn exec_response_keeps_null_exit_code() {
         timed_out: true,
         duration_ms: 1,
         success: false,
+        stdout_truncated: false,
+        stderr_truncated: false,
     })
     .unwrap();
     assert_eq!(v.get("exit_code"), Some(&Value::Null));
+}
+
+#[test]
+fn exec_reply_truncation_flags_default_false() {
+    // A contract 1.0 adapter's reply has no truncation flags.
+    let old = json!({"stdout": "", "stderr": "", "exit_code": 0, "timed_out": false, "duration_ms": 1, "success": true});
+    let exec: ExecResponse = from_value(old.clone()).unwrap();
+    assert!(!exec.stdout_truncated && !exec.stderr_truncated);
+    let run: RunResponse = from_value(old).unwrap();
+    assert!(!run.stdout_truncated && !run.stderr_truncated);
+
+    let v = to_value(ExecResponse {
+        stdout_truncated: true,
+        ..exec
+    })
+    .unwrap();
+    assert_eq!(v["stdout_truncated"], json!(true));
+    assert_eq!(v["stderr_truncated"], json!(false));
 }
 
 #[test]
@@ -257,6 +277,8 @@ fn optional_reply_fields_stay_omitted() {
         timed_out: false,
         duration_ms: 1,
         success: true,
+        stdout_truncated: false,
+        stderr_truncated: false,
         sandbox_id: None,
     })
     .unwrap();
@@ -323,7 +345,7 @@ fn router_info_unbound_json() {
     };
     assert_eq!(
         to_value(unbound).unwrap(),
-        json!({"adapter": null, "namespace": null, "contract": {"major": 1, "minor": 0}, "info": null})
+        json!({"adapter": null, "namespace": null, "contract": {"major": 1, "minor": 1}, "info": null})
     );
 }
 
