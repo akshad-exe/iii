@@ -300,8 +300,7 @@ impl SpawnPlan {
     ///
     /// `None` when the container runs in a VM. There is no host program then,
     /// and `env` is not this command's environment either: it belongs to the
-    /// guest, and reaches it as boot arguments rather than through the boot
-    /// process, which keeps the daemon's own environment to find its firmware.
+    /// guest, and goes to the sandbox adapter in the `worker::start` request.
     pub fn command(&self) -> Option<tokio::process::Command> {
         if self.program.is_empty() {
             return None;

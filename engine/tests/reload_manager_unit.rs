@@ -155,7 +155,6 @@ fn minimal_config() -> (EngineConfig, tempfile::TempDir) {
     let mut config: EngineConfig = serde_yaml::from_str("workers: []\nmodules: []\n").unwrap();
     config.workers.push(iii::workers::config::WorkerEntry {
         name: "configuration".to_string(),
-        image: None,
         config: Some(serde_json::json!({
             "adapter": {
                 "name": "fs",
@@ -299,7 +298,6 @@ impl Worker for TestWorker {
 fn running_worker(name: &str, alive: bool) -> RunningWorker {
     let entry = WorkerEntry {
         name: name.to_string(),
-        image: None,
         config: None,
     };
     let worker: Arc<dyn Worker> = Arc::new(TestWorker {
@@ -319,7 +317,6 @@ async fn promote_dead_unchanged_leaves_live_workers_alone() {
     let running = vec![running_worker("alive-worker", true)];
     let new_entries = vec![WorkerEntry {
         name: "alive-worker".into(),
-        image: None,
         config: None,
     }];
     let mut diff = ReloadDiff {
@@ -347,12 +344,10 @@ async fn promote_dead_unchanged_revives_dead_worker() {
     let new_entries = vec![
         WorkerEntry {
             name: "alive-worker".into(),
-            image: None,
             config: None,
         },
         WorkerEntry {
             name: "dead-worker".into(),
-            image: None,
             config: None,
         },
     ];
@@ -376,7 +371,6 @@ async fn promote_dead_unchanged_skips_entries_without_a_tracked_worker() {
     let running: Vec<RunningWorker> = Vec::new();
     let new_entries = vec![WorkerEntry {
         name: "orphan".into(),
-        image: None,
         config: None,
     }];
     let mut diff = ReloadDiff {

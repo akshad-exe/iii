@@ -170,7 +170,6 @@ fn isolated_config_entry() -> (iii::workers::config::WorkerEntry, tempfile::Temp
     let dir = tempfile::tempdir().expect("create config tempdir");
     let entry = iii::workers::config::WorkerEntry {
         name: "configuration".to_string(),
-        image: None,
         config: Some(serde_json::json!({
             "adapter": {
                 "name": "fs",
@@ -197,7 +196,6 @@ fn minimal_config_for_builder_tests() -> (iii::workers::config::EngineConfig, te
         workers: vec![
             iii::workers::config::WorkerEntry {
                 name: "iii-worker-manager".to_string(),
-                image: None,
                 config: Some(serde_json::json!({
                     "host": "127.0.0.1",
                     "port": 0,
@@ -305,7 +303,6 @@ async fn serve_returns_on_sigterm() {
         workers: vec![
             iii::workers::config::WorkerEntry {
                 name: "iii-worker-manager".to_string(),
-                image: None,
                 config: Some(serde_json::json!({
                     "host": "127.0.0.1",
                     "port": 0,
