@@ -207,6 +207,12 @@ pub struct ExecResponse {
     pub timed_out: bool,
     pub duration_ms: u64,
     pub success: bool,
+    /// `stdout` was cut at the adapter's output cap. Since contract 1.1; false from older adapters.
+    #[serde(default)]
+    pub stdout_truncated: bool,
+    /// `stderr` was cut at the adapter's output cap. Since contract 1.1; false from older adapters.
+    #[serde(default)]
+    pub stderr_truncated: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +380,12 @@ pub struct RunResponse {
     pub timed_out: bool,
     pub duration_ms: u64,
     pub success: bool,
+    /// As `ExecResponse::stdout_truncated`.
+    #[serde(default)]
+    pub stdout_truncated: bool,
+    /// As `ExecResponse::stderr_truncated`.
+    #[serde(default)]
+    pub stderr_truncated: bool,
     /// Present only if `keep_sandbox: true` was set on the request.
     /// Otherwise null (sandbox auto-stopped).
     #[serde(skip_serializing_if = "Option::is_none")]
