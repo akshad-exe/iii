@@ -7,7 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const CONTRACT_MAJOR: u32 = 1;
-pub const CONTRACT_MINOR: u32 = 0;
+pub const CONTRACT_MINOR: u32 = 1;
 
 /// Contract version. A different major is incompatible (S302); a minor only adds fields.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
