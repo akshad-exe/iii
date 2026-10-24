@@ -154,7 +154,7 @@ Run a command inside a live sandbox. Recommended `timeoutMs`: `35_000` (daemon's
 | `timeout_ms` | number | `300_000` | Per-exec deadline enforced inside the daemon. Sized for cold `npm install` / `pip install` / `cargo build`; pass a smaller value for probes and version checks. |
 | `workdir` | string | guest home | Working directory. |
 
-Returns: `{ stdout, stderr, exit_code, timed_out, duration_ms, success }`.
+Returns: `{ stdout, stderr, exit_code, timed_out, duration_ms, success, stdout_truncated, stderr_truncated }`. A `*_truncated` flag is `true` when the adapter cut that stream at its output cap; a contract 1.0 adapter sends neither key.
 
 #### `sandbox::list`
 
@@ -188,7 +188,7 @@ Boot a VM, run a code snippet, capture output, and auto-stop — in a single cal
 | `timeout_ms` | number | `300_000` | Per-run deadline. |
 | `keep_sandbox` | boolean | `false` | Keep the VM alive after the run and return its `sandbox_id`. |
 
-Returns: `{ stdout, stderr, exit_code, timed_out, duration_ms, success, sandbox_id? }`. `sandbox_id` is present only when `keep_sandbox: true`; otherwise the VM is stopped on success and on failure.
+Returns: `{ stdout, stderr, exit_code, timed_out, duration_ms, success, stdout_truncated, stderr_truncated, sandbox_id? }`. The `*_truncated` flags are as for `sandbox::exec`. `sandbox_id` is present only when `keep_sandbox: true`; otherwise the VM is stopped on success and on failure.
 
 ### Catalog (1)
 

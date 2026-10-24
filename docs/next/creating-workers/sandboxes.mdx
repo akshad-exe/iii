@@ -77,9 +77,11 @@ A whitespace-containing `cmd` is split into a command and its arguments. It is n
 does not expand variables or chain commands; use `sandbox::run` with `lang=shell` for that.
 
 The adapter caps the `stdout` and `stderr` that `sandbox::exec` and `sandbox::run` return. When it
-cuts one, the reply sets `stdout_truncated` or `stderr_truncated` to `true`; adapters older than
-contract 1.1 always report `false`. For large output, write it to a file in the sandbox and fetch
-it with `sandbox::fs::read`.
+cuts one, the reply sets `stdout_truncated` or `stderr_truncated` to `true`. A contract 1.0 adapter
+sends neither key: the router passes its reply through unchanged, so a missing key means unknown,
+not `false`. The adapter's contract version is `info.contract` in the `sandbox::adapter::info`
+reply; the top-level `contract` there is the router's own. For large output, write it to a file in
+the sandbox and fetch it with `sandbox::fs::read`.
 
 ## Concurrency and idle cleanup
 
