@@ -9,9 +9,11 @@ router: it serves the `sandbox::*` triggers and forwards every call to a sandbox
 `sandbox-builtin` worker is that adapter. It runs the VMs, it comes from the worker registry, and
 Compose installs it when a project needs it.
 
-Consumers keep calling `sandbox::*` in the `default` namespace, and no existing request, response,
-or S-code changed. What changes is where you configure sandboxes and where their state is kept. Work through the
-sections that apply to your setup.
+Consumers keep calling `sandbox::*` in the `default` namespace, and no existing request field,
+response field, or S-code changed. The `sandbox::exec` and `sandbox::run` replies gain two keys,
+`stdout_truncated` and `stderr_truncated` (contract 1.1, see
+[Sandboxes](../creating-workers/sandboxes#lifecycle)). What changes is where you configure sandboxes
+and where their state is kept. Work through the sections that apply to your setup.
 
 ## What moved
 
@@ -131,6 +133,10 @@ on [Sandboxes](../creating-workers/sandboxes).
 `<compose-dir>/.iii/compose/<namespace>/`, or the directory under `$III_COMPOSE_STATE_DIR` when you
 set it. Nothing reads these directories now, so delete them. The first boot of each VM in 0.26
 starts from fresh state and reinstalls its dependencies.
+
+`iii-worker` also left `~/.iii/managed/`, and older releases left `~/.iii/rootfs/` and
+`~/.iii/images/`. `sandbox-builtin` reads none of them, so delete them too. It keeps pulled images
+in `~/.iii/cache/`, where 0.25 put them, so those are not pulled again.
 
 The state is now in `~/.iii/sandbox/workers/<vm_id>/`, owned by the adapter. Compose deletes it
 when you remove the VM container. Two cases leave it behind for you to delete by hand:

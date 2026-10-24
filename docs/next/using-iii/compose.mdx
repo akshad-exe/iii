@@ -974,7 +974,9 @@ directory or follows a symbolic link. `<namespace>` is the daemon's namespace.
 | `state.json`         | Child process records for the project. Owner-only.                                             |
 | `config/`            | Resolved worker configuration files.                                                          |
 | `logs/`              | Rotating stdout and stderr for project workers.                                                |
-| `vm/`                | VM state for bundle and local-image workers, including rootfs, boot scripts and guest configs. |
+
+VM workers keep their state outside this directory: the sandbox adapter stores it in
+`~/.iii/sandbox/workers/<vm_id>/`, and Compose deletes it when you remove the container.
 
 Two projects can use `default` with separate engines on different ports. Starting the same project
 and namespace twice is refused. Two daemons on the same engine must use different namespaces.
