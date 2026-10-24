@@ -2578,10 +2578,10 @@ impl Engine {
                             namespace: namespace.clone(),
                             worker_name: None,
                             function_id: Some(reg_id.clone()),
-                            // Reserved-prefix refusal, not a real conflict: no
-                            // worker owns a reserved prefix (the engine does), so
-                            // don't name the rejected worker as its own owner.
-                            owner_worker_id: String::new(),
+                            // Reserved-prefix refusal, not a real conflict: the
+                            // engine owns it, and the SDKs print this field as the
+                            // owner ("already exported by worker <owner>").
+                            owner_worker_id: "engine (reserved prefix)".to_string(),
                         },
                     )
                     .await;
@@ -5181,7 +5181,10 @@ mod tests {
         };
         assert_eq!(code, crate::protocol::FUNCTION_NAMESPACE_CONFLICT);
         assert_eq!(function_id.as_deref(), Some("sandbox::exec"));
-        assert_eq!(owner_worker_id, "", "no worker owns a reserved prefix");
+        assert_eq!(
+            owner_worker_id, "engine (reserved prefix)",
+            "the SDKs print the owner, so name the engine's reservation"
+        );
 
         // Other namespaces stay open.
         let (tx2, _rx2) = mpsc::channel::<Outbound>(8);
