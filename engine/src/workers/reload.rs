@@ -79,8 +79,8 @@ pub struct ReloadDiff {
 }
 
 /// Partitions `new` against `old` into added/removed/changed/unchanged. Pure
-/// function. Equality uses `WorkerEntry::PartialEq` which compares `name`,
-/// `image`, and `config` structurally.
+/// function. Equality uses `WorkerEntry::PartialEq` which compares `name`
+/// and `config` structurally.
 pub fn diff_entries(old: &[WorkerEntry], new: &[WorkerEntry]) -> ReloadDiff {
     let old_map: HashMap<&str, &WorkerEntry> = old.iter().map(|e| (e.name.as_str(), e)).collect();
     let new_map: HashMap<&str, &WorkerEntry> = new.iter().map(|e| (e.name.as_str(), e)).collect();
@@ -299,9 +299,7 @@ impl ReloadManager {
         worker_arc.register_functions(engine.clone());
         let registrations = engine.end_worker_scope();
 
-        if let Some(runtime_worker) =
-            runtime_worker_info_from_registration(entry, worker_arc.as_ref(), &registrations)
-        {
+        if let Some(runtime_worker) = runtime_worker_info_from_registration(entry, &registrations) {
             engine.upsert_runtime_worker(runtime_worker);
         }
 

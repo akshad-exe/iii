@@ -242,7 +242,6 @@ fn default_worker_entries() -> Vec<WorkerEntry> {
         .filter(|registration| registration.is_default)
         .map(|registration| WorkerEntry {
             name: registration.name.to_string(),
-            image: None,
             config: None,
         })
         .collect()
@@ -251,8 +250,6 @@ fn default_worker_entries() -> Vec<WorkerEntry> {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct WorkerEntry {
     pub name: String,
-    #[serde(default)]
-    pub image: Option<String>,
     #[serde(default)]
     pub config: Option<Value>,
 }
@@ -322,44 +319,22 @@ impl WorkerRegistry {
             .insert(name.to_string(), info);
     }
 
-    /// Creates a worker instance using the engine-owned resolution chain:
-    /// 1. Validates that built-in workers cannot have an `image` field.
-    /// 2. Tries the built-in registry.
+    /// Creates a worker instance from the built-in registry.
     ///
     /// Project workers are deliberately not resolved here. Compose owns their
     /// installation and lifecycle.
     pub async fn create_worker(
         self: &Arc<Self>,
         name: &str,
-        image: Option<&str>,
         engine: Arc<Engine>,
         config: Option<Value>,
     ) -> anyhow::Result<Box<dyn Worker>> {
-        // 1. Validate: image + built-in = error
-        if image.is_some() {
-            let is_builtin = self
-                .worker_factories
-                .read()
-                .expect("RwLock poisoned")
-                .contains_key(name);
-            if is_builtin {
-                return Err(anyhow::anyhow!(
-                    "Worker '{}' is a built-in worker and cannot have an 'image' field. \
-                     Remove 'image' or use a different name.",
-                    name
-                ));
-            }
-        }
-
-        // 2. Try built-in registry (skip if image is set — that's always external)
-        if image.is_none() {
-            let factory = {
-                let factories = self.worker_factories.read().expect("RwLock poisoned");
-                factories.get(name).map(|info| info.factory.clone())
-            };
-            if let Some(factory) = factory {
-                return factory(engine, config).await;
-            }
+        let factory = {
+            let factories = self.worker_factories.read().expect("RwLock poisoned");
+            factories.get(name).map(|info| info.factory.clone())
+        };
+        if let Some(factory) = factory {
+            return factory(engine, config).await;
         }
 
         anyhow::bail!(
@@ -402,12 +377,7 @@ impl WorkerEntry {
         registry: &Arc<WorkerRegistry>,
     ) -> anyhow::Result<Box<dyn Worker>> {
         registry
-            .create_worker(
-                self.worker_type(),
-                self.image.as_deref(),
-                engine,
-                self.config.clone(),
-            )
+            .create_worker(self.worker_type(), engine, self.config.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create {}: {}", self.name, e))
     }
@@ -445,7 +415,6 @@ pub fn normalize_worker_entries(config: EngineConfig) -> Vec<WorkerEntry> {
         if registration.mandatory && !names.contains(registration.name) {
             entries.push(WorkerEntry {
                 name: registration.name.to_string(),
-                image: None,
                 config: sandbox
                     .clone()
                     .filter(|_| registration.name == "iii-sandbox"),
@@ -474,7 +443,6 @@ fn builtin_worker_description(worker_type: &str) -> Option<&'static str> {
 
 pub(crate) fn runtime_worker_info_from_registration(
     entry: &WorkerEntry,
-    _worker: &dyn Worker,
     registrations: &super::reload::WorkerRegistrations,
 ) -> Option<crate::worker_connections::RuntimeWorkerInfo> {
     let worker_type = entry.worker_type().to_string();
@@ -651,7 +619,6 @@ impl EngineBuilder {
         if let Some(ref mut cfg) = self.config {
             cfg.workers.push(WorkerEntry {
                 name: name.to_string(),
-                image: None,
                 config,
             });
         }
@@ -699,7 +666,7 @@ impl EngineBuilder {
             let worker_arc: Arc<dyn Worker> = Arc::from(worker);
 
             if let Some(runtime_worker) =
-                runtime_worker_info_from_registration(&entry, worker_arc.as_ref(), &registrations)
+                runtime_worker_info_from_registration(&entry, &registrations)
             {
                 self.engine.upsert_runtime_worker(runtime_worker);
             }
@@ -1822,7 +1789,7 @@ config:
         let registry = Arc::new(WorkerRegistry::new());
         let engine = Arc::new(Engine::new());
         let result = registry
-            .create_worker("nonexistent::Module", None, engine, None)
+            .create_worker("nonexistent::Module", engine, None)
             .await;
         let error = match result {
             Ok(_) => panic!("project workers must not be started by the engine"),
@@ -1862,9 +1829,7 @@ config:
         registry.register::<TestMod>("test::TestMod");
 
         let engine = Arc::new(Engine::new());
-        let result = registry
-            .create_worker("test::TestMod", None, engine, None)
-            .await;
+        let result = registry.create_worker("test::TestMod", engine, None).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().name(), "test_mod");
     }
@@ -1877,7 +1842,6 @@ config:
     async fn test_module_entry_create_unknown_points_to_compose() {
         let entry = WorkerEntry {
             name: "unknown::Module".to_string(),
-            image: None,
             config: None,
         };
         let registry = Arc::new(WorkerRegistry::new());
@@ -2378,55 +2342,6 @@ modules:
     }
 
     #[test]
-    fn test_worker_entry_with_image_field() {
-        let yaml = r#"
-workers:
-  - name: my-worker
-    image: docker.io/org/worker:latest
-    config:
-      port: 8080
-"#;
-        let config: EngineConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.workers.len(), 1);
-        assert_eq!(config.workers[0].name, "my-worker");
-        assert_eq!(
-            config.workers[0].image.as_deref(),
-            Some("docker.io/org/worker:latest")
-        );
-    }
-
-    #[test]
-    fn test_worker_entry_without_image_field() {
-        let yaml = r#"
-workers:
-  - name: iii-stream
-    config:
-      port: 3112
-"#;
-        let config: EngineConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.workers[0].image, None);
-    }
-
-    #[test]
-    fn test_engine_config_deserialize_workers_with_image() {
-        let yaml = r#"
-workers:
-  - name: pdfkit
-    image: ghcr.io/iii-hq/pdfkit:1.0
-    config:
-      timeout: 30
-"#;
-        let config: EngineConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.workers.len(), 1);
-        assert_eq!(config.workers[0].name, "pdfkit");
-        assert_eq!(
-            config.workers[0].image.as_deref(),
-            Some("ghcr.io/iii-hq/pdfkit:1.0")
-        );
-        assert!(config.workers[0].config.is_some());
-    }
-
-    #[test]
     fn test_engine_config_deserialize_legacy_modules_key() {
         let yaml = r#"
 modules:
@@ -2445,7 +2360,6 @@ modules:
   - name: builtin
 workers:
   - name: external
-    image: ghcr.io/org/ext:latest
 "#;
         let config: EngineConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.modules.len(), 1);
@@ -2493,28 +2407,16 @@ workers:
     }
 
     #[test]
-    fn test_engine_config_worker_without_image() {
-        let yaml = r#"
-workers:
-  - name: binary-worker
-"#;
-        let config: EngineConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.workers.len(), 1);
-        assert!(config.workers[0].image.is_none());
-        assert!(config.workers[0].config.is_none());
-    }
-
-    #[test]
     fn test_engine_config_with_env_var_expansion() {
         unsafe {
-            env::set_var("TEST_IMAGE_TAG", "2.0.0");
+            env::set_var("TEST_WORKER_TAG", "2.0.0");
         }
-        let yaml = "workers:\n  - name: w\n    image: ghcr.io/org/w:${TEST_IMAGE_TAG}\n";
+        let yaml = "workers:\n  - name: w\n    config:\n      tag: v${TEST_WORKER_TAG}\n";
         let expanded = EngineConfig::expand_env_vars(yaml);
         let config: EngineConfig = serde_yaml::from_str(&expanded).unwrap();
         assert_eq!(
-            config.workers[0].image.as_deref(),
-            Some("ghcr.io/org/w:2.0.0")
+            config.workers[0].config,
+            Some(serde_json::json!({ "tag": "v2.0.0" }))
         );
     }
 
@@ -2530,7 +2432,6 @@ workers:
                 modules: Vec::new(),
                 workers: vec![WorkerEntry {
                     name: "iii-worker-manager".to_string(),
-                    image: None,
                     config: Some(serde_json::json!({
                         "host": "127.0.0.1",
                         "port": 0,
