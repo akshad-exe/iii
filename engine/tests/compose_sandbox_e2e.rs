@@ -56,16 +56,6 @@ fn iii_bin() -> Command {
     command
 }
 
-/// `PATH` without any directory that holds an `iii-worker`: the adapter must
-/// come from the registry, never from a legacy install.
-fn path_without_iii_worker() -> std::ffi::OsString {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::join_paths(
-        std::env::split_paths(&path).filter(|dir| !dir.join("iii-worker").exists()),
-    )
-    .expect("rejoin PATH")
-}
-
 /// A process from `ps`. It has no `Debug`: a `__vm-boot` command line carries
 /// the guest environment, which a failed assertion must not print.
 struct Proc {
@@ -210,7 +200,6 @@ impl Project {
             iii_bin()
                 .current_dir(self.dir.path())
                 .env("HOME", self.home.path())
-                .env("PATH", path_without_iii_worker())
                 .args(["compose", "--namespace", NAMESPACE, "--up"])
                 .stdin(Stdio::null())
                 .stdout(log.try_clone().unwrap())

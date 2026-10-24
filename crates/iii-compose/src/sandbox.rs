@@ -433,7 +433,7 @@ pub fn state_key(state_dir: &Path, key: &str) -> String {
 /// How long [`RemoteVm::stop`] keeps asking an adapter that does not answer;
 /// short under test, so a test can wait the bound out.
 const STOP_RETRY: Duration = Duration::from_secs(if cfg!(test) { 2 } else { 60 });
-/// `worker::prepare`'s budget: an image pull, as `iii-worker` had (spec 5.4).
+/// `worker::prepare`'s budget: room for an image pull (spec 5.4).
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 /// How long a registered adapter may take to register `adapter::info` (spec 7.4);
 /// short under test, below STOP_RETRY.

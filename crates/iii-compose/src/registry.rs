@@ -217,7 +217,7 @@ pub fn host_target() -> &'static str {
 /// The x86_64 glibc and musl dynamic loaders. A glibc distribution has the
 /// first. A musl one (Alpine) has the second, and may have the first too as a
 /// compatibility link to itself (libc6-compat, gcompat), so the musl loader
-/// decides, as it does for `iii-worker`'s own binary and the installer.
+/// decides, as it does for the installer.
 const GLIBC_LOADER: &str = "/lib64/ld-linux-x86-64.so.2";
 const MUSL_LOADER: &str = "/lib/ld-musl-x86_64.so.1";
 
