@@ -435,8 +435,9 @@ pub fn state_key(state_dir: &Path, key: &str) -> String {
 const STOP_RETRY: Duration = Duration::from_secs(if cfg!(test) { 2 } else { 60 });
 /// `worker::prepare`'s budget: an image pull, as `iii-worker` had (spec 5.4).
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(20 * 60);
-/// How long a registered adapter may take to register `adapter::info` (spec 7.4).
-const INFO_RETRY: Duration = Duration::from_secs(10);
+/// How long a registered adapter may take to register `adapter::info` (spec 7.4);
+/// short under test, below STOP_RETRY.
+const INFO_RETRY: Duration = Duration::from_secs(if cfg!(test) { 1 } else { 10 });
 /// How long a VM start waits for a dropped engine connection to come back: an
 /// engine restart's few seconds plus the SDK's 2 s reconnect delay, so a dead
 /// engine fails the start near 0.25's ~17 s, not at PREPARE_TIMEOUT; short under test.
@@ -534,10 +535,13 @@ impl RemoteVm {
 
     /// `worker::stop` with `grace`. Only an answer from the adapter ends it: a
     /// bus error is retried every second until the VM is seen to exit or
-    /// [`STOP_RETRY`] passes, then this warns and returns, so `down` cannot
-    /// hang on an adapter that is gone.
+    /// [`STOP_RETRY`] passes ([`INFO_RETRY`] of `function_not_found`: an
+    /// adapter registers again within it, so one still missing is gone or on
+    /// another engine), then this warns and returns, so `down` cannot hang on
+    /// an adapter that is gone.
     pub async fn stop(&self, grace: Duration) -> ExitStatus {
         let deadline = tokio::time::Instant::now() + STOP_RETRY;
+        let mut missing_since = None;
         loop {
             if let Outcome::Exited(status) = self.poll() {
                 return status;
@@ -557,7 +561,13 @@ impl RemoteVm {
                     Outcome::Running | Outcome::Unknown => vm_exit(None, None),
                 };
             }
-            if tokio::time::Instant::now() >= deadline {
+            let now = tokio::time::Instant::now();
+            let unregistered = matches!(
+                &reply,
+                Err(iii_sdk::Error::Remote { code, .. }) if code == "function_not_found"
+            );
+            missing_since = unregistered.then(|| missing_since.unwrap_or(now));
+            if now >= deadline || missing_since.is_some_and(|since| now >= since + INFO_RETRY) {
                 let VmRecord {
                     adapter,
                     vm_id,
@@ -2236,12 +2246,15 @@ pub(crate) mod tests {
         assert!(began.elapsed() >= RECONNECT_GRACE, "{:?}", began.elapsed());
     }
 
-    /// An adapter that is not there never answers: the stop gives up once
-    /// STOP_RETRY has passed, with no code.
+    /// An adapter that never answers: the stop gives up once STOP_RETRY has
+    /// passed, with no code.
     #[cfg(unix)]
     #[tokio::test]
     async fn a_stop_nobody_answers_ends_after_stop_retry() {
-        let (client, _called) = fake_engine(|_, _| not_found()).await;
+        let (client, _called) = fake_engine(
+            |_, _| serde_json::json!({ "error": { "code": "timeout", "message": "no reply" } }),
+        )
+        .await;
         let vm = RemoteVm::spawn(client, vm_record(), "t".into(), None);
         let began = tokio::time::Instant::now();
         assert_eq!(vm.stop(Duration::from_secs(1)).await.code(), None);
@@ -2250,6 +2263,20 @@ pub(crate) mod tests {
             took >= STOP_RETRY && took < STOP_RETRY + POLL_INTERVAL * 2,
             "{took:?}"
         );
+    }
+
+    /// An adapter this bus does not have (gone, or answering on another
+    /// engine) would register again within INFO_RETRY: the stop gives up
+    /// then, not at STOP_RETRY.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_stop_of_an_adapter_not_on_this_bus_ends_after_info_retry() {
+        let (client, _called) = fake_engine(|_, _| not_found()).await;
+        let vm = RemoteVm::spawn(client, vm_record(), "t".into(), None);
+        let began = tokio::time::Instant::now();
+        assert_eq!(vm.stop(Duration::from_secs(1)).await.code(), None);
+        let took = began.elapsed();
+        assert!(took >= INFO_RETRY && took < STOP_RETRY, "{took:?}");
     }
 
     /// A restarted adapter answers S504 for the VM it lost: the poller reads
