@@ -68,7 +68,6 @@ architecture/
 .sisyphus/
 conductor
 .omc
-iii_workers/
 
 # Generated API doc intermediates
 sdk/packages/node/iii/api-docs.json

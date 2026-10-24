@@ -189,7 +189,7 @@ project worker stops startup/reload with `UNSUPPORTED_CONFIG_WORKERS`.
 
 ## Boundaries
 
-- Project worker lifecycle belongs to Compose, not `config.yaml` or `iii worker`.
+- Project worker lifecycle belongs to Compose, not `config.yaml`.
 - For function and trigger code, use `iii-core-primitives`; for observer code and filters, use
   `iii-observe`.
 - For worker-specific HTTP, queue, cron, state, or pubsub behavior, use that worker's docs.

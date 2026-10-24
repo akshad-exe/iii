@@ -136,8 +136,8 @@ the same function and trigger registry. Compose only owns processes declared in 
 
 ## Migrating an existing project
 
-0.23 removed `iii worker`, `worker::*`, and engine-side startup of project workers. Follow the
-[manual migration guide](../upgrading/workers-to-compose) before starting an older project.
+Follow the [manual migration guide](../upgrading/workers-to-compose) before starting a project
+from iii 0.22 or earlier.
 
 ## Authoring workers
 
