@@ -755,6 +755,7 @@ pub(crate) async fn start_vm(
 
     let info = start_call::<AdapterInfo>(
         engine,
+        key,
         adapter,
         namespace,
         ADAPTER_INFO_SUFFIX,
@@ -780,6 +781,7 @@ pub(crate) async fn start_vm(
     };
     start_call::<WorkerPrepareResponse>(
         engine,
+        key,
         adapter,
         namespace,
         WORKER_PREPARE,
@@ -814,18 +816,21 @@ pub(crate) async fn start_vm(
     ))
 }
 
-/// [`call`] for a step of a VM's start, which an engine restart must not fail:
-/// 0.25 prepared without the bus. A call whose connection drops is sent again
-/// once the engine is back, unless the managed engine exited, all within
-/// `timeout`; an engine not back within [`RECONNECT_GRACE`] fails the step with
-/// the `NotConnected`, so the restart policy decides. The adapter registers
-/// its functions after its worker name, and again on its own reconnect, so
-/// `function_not_found` is asked again for [`INFO_RETRY`] after a drop, or
-/// from the first call with `registering`.
+/// [`call`] for a step of `container`'s start, which an engine restart must not
+/// fail: 0.25 prepared without the bus. A call whose connection drops, or that
+/// begins after a drop before the engine is back, is sent again once it is,
+/// unless the managed engine exited, all within `timeout`; an engine not back
+/// within [`RECONNECT_GRACE`] fails the step with the `NotConnected`, so the
+/// restart policy decides. Only the first connection, as at daemon start, gets
+/// the whole `timeout`. The adapter registers its functions after its worker
+/// name, and again on its own reconnect, so `function_not_found` is asked again
+/// for [`INFO_RETRY`] after a drop, or from the first call with `registering`.
 /// Each step is idempotent; a re-sent `worker::start` that meets the boot of
 /// the dropped one gets S502, which [`worker_start`] stops.
+#[allow(clippy::too_many_arguments)]
 async fn start_call<T: serde::de::DeserializeOwned>(
     engine: &EngineClient,
+    container: &str,
     adapter: &str,
     namespace: &str,
     suffix: &str,
@@ -837,21 +842,22 @@ async fn start_call<T: serde::de::DeserializeOwned>(
     let mut missing_since = None;
     loop {
         let left = deadline.saturating_duration_since(tokio::time::Instant::now());
-        let reply = call(engine.client(), adapter, namespace, suffix, request, left).await;
+        let client = engine.client();
+        let reply = match client.get_connection_state() {
+            IIIConnectionState::Connected | IIIConnectionState::Reconnecting => {
+                send(client, adapter, namespace, suffix, request, left).await
+            }
+            _ => call(client, adapter, namespace, suffix, request, left).await,
+        };
         let now = tokio::time::Instant::now();
         match &reply {
             Err(iii_sdk::Error::NotConnected) if now < deadline && !engine.has_exited() => {
+                let wait = RECONNECT_GRACE.min(deadline - now);
                 crate::report::daemon_line(
-                    &format!(
-                        "sandbox: the engine connection dropped during {}; waiting up to {}s \
-                         for it to come back",
-                        adapter_function_id(adapter, suffix),
-                        RECONNECT_GRACE.as_secs()
-                    ),
+                    &reconnect_line(container, &adapter_function_id(adapter, suffix), wait),
                     true,
                 );
-                let back = deadline.min(now + RECONNECT_GRACE);
-                if tokio::time::timeout_at(back, connection(engine.client(), true))
+                if tokio::time::timeout(wait, connection(client, true))
                     .await
                     .is_err()
                 {
@@ -870,6 +876,15 @@ async fn start_call<T: serde::de::DeserializeOwned>(
             _ => return reply,
         }
     }
+}
+
+/// What [`start_call`] prints while `container` waits up to `wait` for the
+/// engine to come back.
+fn reconnect_line(container: &str, function: &str, wait: Duration) -> String {
+    format!(
+        "{container}: no engine connection for {function}; waiting up to {}s for it to come back",
+        wait.as_millis().div_ceil(1000)
+    )
 }
 
 /// `worker::destroy` for VM container `key`'s state. The adapter refuses it
@@ -1046,6 +1061,7 @@ async fn worker_start(
     let start = || {
         start_call(
             engine,
+            &request.worker_name,
             adapter,
             namespace,
             WORKER_START,
@@ -1107,6 +1123,28 @@ async fn call<T: serde::de::DeserializeOwned>(
     request: &impl serde::Serialize,
     timeout: Duration,
 ) -> std::result::Result<T, iii_sdk::Error> {
+    // The SDK keeps a call pending across a reconnect until its timeout, and
+    // an engine that died or restarted never answers it. So the call goes out
+    // once connected, and that connection dropping ends it.
+    let sent = async {
+        connection(client, true).await;
+        send(client, adapter, namespace, suffix, request, timeout).await
+    };
+    tokio::time::timeout(timeout, sent)
+        .await
+        .unwrap_or(Err(iii_sdk::Error::Timeout))
+}
+
+/// [`call`] without its wait for the connection: one that is down when this
+/// begins, or drops, ends it at once as `NotConnected`.
+async fn send<T: serde::de::DeserializeOwned>(
+    client: &IIIClient,
+    adapter: &str,
+    namespace: &str,
+    suffix: &str,
+    request: &impl serde::Serialize,
+    timeout: Duration,
+) -> std::result::Result<T, iii_sdk::Error> {
     let request = TriggerRequest {
         function_id: adapter_function_id(adapter, suffix),
         payload: serde_json::to_value(request)?,
@@ -1114,14 +1152,13 @@ async fn call<T: serde::de::DeserializeOwned>(
         timeout_ms: Some(timeout.as_millis() as u64),
     }
     .namespace(namespace);
-    // The SDK keeps a call pending across a reconnect until its timeout, and
-    // an engine that died or restarted never answers it. So the call goes out
-    // once connected, and that connection dropping ends it.
     let sent = async {
-        connection(client, true).await;
         tokio::select! {
-            reply = client.trigger(request) => reply,
+            // First, so a call that begins disconnected is never queued in the
+            // SDK, which would send it on the next connection.
+            biased;
             () = connection(client, false) => Err(iii_sdk::Error::NotConnected),
+            reply = client.trigger(request) => reply,
         }
     };
     let reply = tokio::time::timeout(timeout, sent)
@@ -2219,31 +2256,52 @@ pub(crate) mod tests {
 
     /// An external engine that stays dead never sets `has_exited`: a start's
     /// dropped call waits RECONNECT_GRACE for it, then fails as before the
-    /// re-send, so the restart policy decides well before PREPARE_TIMEOUT.
+    /// re-send, so the restart policy decides well before PREPARE_TIMEOUT. So
+    /// does a step that begins once the connection is already down.
     #[tokio::test]
     async fn a_start_call_whose_engine_stays_dead_fails_after_the_grace() {
         let (url, _called) = fake_engine_url(|_, _| serde_json::Value::Bool(false)).await;
         let engine = EngineClient::connect(&url, "t", "t");
-        let began = tokio::time::Instant::now();
-        let reply = tokio::time::timeout(
-            RECONNECT_GRACE + Duration::from_secs(2),
-            start_call::<WorkerPrepareResponse>(
-                &engine,
-                "sandbox-builtin",
-                "shop",
-                WORKER_PREPARE,
-                &serde_json::json!({}),
-                PREPARE_TIMEOUT,
-                false,
+        let request = serde_json::json!({});
+        // The second step begins with the connection already down.
+        for suffix in [WORKER_PREPARE, WORKER_START] {
+            let began = tokio::time::Instant::now();
+            let reply = tokio::time::timeout(
+                RECONNECT_GRACE + Duration::from_secs(2),
+                start_call::<WorkerPrepareResponse>(
+                    &engine,
+                    "vm",
+                    "sandbox-builtin",
+                    "shop",
+                    suffix,
+                    &request,
+                    PREPARE_TIMEOUT,
+                    false,
+                ),
+            )
+            .await
+            .expect("the start must not wait out PREPARE_TIMEOUT");
+            assert!(
+                matches!(reply, Err(iii_sdk::Error::NotConnected)),
+                "{reply:?}"
+            );
+            assert!(began.elapsed() >= RECONNECT_GRACE, "{:?}", began.elapsed());
+            assert!(!engine.is_connected());
+        }
+    }
+
+    /// The wait line names the container and the wait it has left, not more.
+    #[test]
+    fn the_reconnect_line_names_the_container_and_the_wait_left() {
+        assert_eq!(
+            reconnect_line(
+                "web",
+                "sandbox-builtin::worker::start",
+                Duration::from_millis(3200)
             ),
-        )
-        .await
-        .expect("the start must not wait out PREPARE_TIMEOUT");
-        assert!(
-            matches!(reply, Err(iii_sdk::Error::NotConnected)),
-            "{reply:?}"
+            "web: no engine connection for sandbox-builtin::worker::start; waiting up to 4s \
+             for it to come back"
         );
-        assert!(began.elapsed() >= RECONNECT_GRACE, "{:?}", began.elapsed());
     }
 
     /// An adapter that never answers: the stop gives up once STOP_RETRY has
