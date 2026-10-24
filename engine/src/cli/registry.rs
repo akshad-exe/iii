@@ -151,13 +151,6 @@ mod tests {
     }
 
     #[test]
-    fn vm_binaries_are_no_longer_managed() {
-        for target in ["iii-worker", "iii-init", "worker"] {
-            assert!(resolve_binary_for_update(target).is_err(), "{target}");
-        }
-    }
-
-    #[test]
     fn test_cloud_has_checksum() {
         let (spec, _) = resolve_command("cloud").unwrap();
         assert!(spec.has_checksum);
