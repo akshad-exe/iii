@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       bin_name:
-        description: 'Binary name (e.g., iii, iii-worker)'
+        description: 'Binary name (e.g., iii)'
         required: true
         type: string
       manifest_path:
@@ -40,11 +40,6 @@ on:
         required: false
         type: string
         default: ''
-      features:
-        description: 'Cargo features to enable (e.g., iii-filesystem/embed-init)'
-        required: false
-        type: string
-        default: ''
       dry_run:
         description: 'Build binaries without uploading or creating releases'
         required: false
@@ -55,18 +50,8 @@ on:
         required: false
         type: string
         default: ''
-      targets:
-        description: 'JSON array of target triples to build (also supports aarch64-unknown-linux-musl on a native ARM runner). Leave empty for the default 9-target matrix.'
-        required: false
-        type: string
-        default: ''
       slack_label:
         description: 'Label for this step in Slack notifications (optional)'
-        required: false
-        type: string
-        default: ''
-      system_deps:
-        description: 'Space-separated list of additional apt packages to install on Linux (e.g., libcap-ng-dev)'
         required: false
         type: string
         default: ''
@@ -84,10 +69,6 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
   CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
-  CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_PKG_CONFIG_ALLOW_CROSS: '1'
-  PKG_CONFIG_SYSROOT_DIR_aarch64_unknown_linux_gnu: /usr/aarch64-linux-gnu
-  PKG_CONFIG_PATH_aarch64_unknown_linux_gnu: /usr/lib/aarch64-linux-gnu/pkgconfig
-  CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS: '-C link-arg=-L/usr/lib/aarch64-linux-gnu'
 
 jobs:
   prepare-matrix:
@@ -98,25 +79,10 @@ jobs:
     steps:
       - name: Compute build matrix
         id: set-matrix
-        env:
-          TARGETS_INPUT: ${{ inputs.targets }}
         run: |
           # Default 9-target matrix
           DEFAULT='{"include":[{"target":"x86_64-apple-darwin","os":"macos-latest"},{"target":"aarch64-apple-darwin","os":"macos-latest"},{"target":"x86_64-pc-windows-msvc","os":"windows-latest"},{"target":"i686-pc-windows-msvc","os":"windows-latest"},{"target":"aarch64-pc-windows-msvc","os":"windows-latest"},{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-22.04"},{"target":"x86_64-unknown-linux-musl","os":"ubuntu-latest"},{"target":"aarch64-unknown-linux-gnu","os":"ubuntu-22.04"},{"target":"armv7-unknown-linux-gnueabihf","os":"ubuntu-22.04"}]}'
-
-          if [ -z "$TARGETS_INPUT" ]; then
-            echo "matrix=$DEFAULT" >> "$GITHUB_OUTPUT"
-            echo "Using default 9-target matrix"
-          else
-            # Keep the default engine matrix unchanged. ARM musl workers need
-            # a native runner and are enabled only by an explicit target list.
-            FILTERED=$(echo "$DEFAULT" | jq -c --argjson targets "$TARGETS_INPUT" '
-              .include += [{"target":"aarch64-unknown-linux-musl","os":"ubuntu-24.04-arm"}] |
-              .include |= [ .[] | select(.target as $t | $targets | index($t)) ]
-            ')
-            echo "matrix=$FILTERED" >> "$GITHUB_OUTPUT"
-            echo "Filtered matrix to targets: $TARGETS_INPUT"
-          fi
+          echo "matrix=$DEFAULT" >> "$GITHUB_OUTPUT"
 
   pre-build:
     name: Pre-build
@@ -211,28 +177,6 @@ jobs:
           name: ${{ inputs.artifact_name }}
           path: ${{ inputs.artifact_dest }}
 
-      - name: Install additional system dependencies
-        if: runner.os == 'Linux' && inputs.system_deps != ''
-        env:
-          BUILD_TARGET: ${{ matrix.target }}
-        run: |
-          sudo apt-get update
-          case "$BUILD_TARGET" in
-            aarch64-unknown-linux-gnu)
-              sudo dpkg --add-architecture arm64
-              sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-              echo "deb [arch=arm64] http://ports.ubuntu.com/ $(lsb_release -cs) main restricted universe" | sudo tee /etc/apt/sources.list.d/arm64.list
-              echo "deb [arch=arm64] http://ports.ubuntu.com/ $(lsb_release -cs)-updates main restricted universe" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-              sudo apt-get update
-              for pkg in ${{ inputs.system_deps }}; do
-                sudo apt-get install -y "${pkg}:arm64"
-              done
-              ;;
-            *)
-              sudo apt-get install -y ${{ inputs.system_deps }}
-              ;;
-          esac
-
       - name: Install cross-compilation tools
         if: runner.os == 'Linux'
         env:
@@ -274,7 +218,6 @@ jobs:
         with:
           bin: ${{ inputs.bin_name }}
           target: ${{ matrix.target }}
-          features: ${{ inputs.features }}
           ref: refs/tags/${{ inputs.tag_name }}
           tar: unix
           zip: windows
