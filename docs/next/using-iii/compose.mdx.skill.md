@@ -486,7 +486,7 @@ compose daemon).
 | `starting`   | Spawned. The engine has not registered it yet.                                                |
 | `ready`      | Registered in the engine under `(namespace, container)`.                                      |
 | `restarting` | Waiting for the next configured retry. No process or PID is active.                           |
-| `failed`     | Exited unsuccessfully with no eligible retry, exhausted its retries, never registered during `up` or a restart, or one of its hooks failed. `last_error` says why. |
+| `failed`     | Exited unsuccessfully with no eligible retry, exhausted its retries, failed to start during `up` or a restart before it registered (a failed `pre_run` hook included), or did not register again within its `startup_timeout` after an engine reconnect and was stopped. After a daemon restart, also a worker that exited while the daemon was away or while it was being adopted, or whose live PID Compose cannot prove is the one it started. That process is left running and never signalled. `last_error` says why. |
 | `stopped`    | Stopped by the daemon, or exited successfully without an eligible restart.                    |
 
 ### Listing processes
