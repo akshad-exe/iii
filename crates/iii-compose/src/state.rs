@@ -240,8 +240,9 @@ pub enum Reconciliation {
 /// Read-only: inspects the recorded child and returns what to do. Signals
 /// nothing, kills nothing.
 pub fn reconcile(record: &ChildRecord) -> Reconciliation {
-    // A failed record was not running when it was saved, and its last_error
-    // already says why; re-checking it would replace that with "exited".
+    // A failed record's last_error already says why; re-checking it would
+    // replace that with "exited". The one failed record that may still run,
+    // an unverifiable pid, is never signalled anyway.
     if matches!(record.status, ChildStatus::Stopped | ChildStatus::Failed) {
         return Reconciliation::Stopped;
     }
