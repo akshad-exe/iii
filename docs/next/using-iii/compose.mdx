@@ -492,7 +492,7 @@ compose daemon).
 | `starting`   | Spawned. The engine has not registered it yet.                                                |
 | `ready`      | Registered in the engine under `(namespace, container)`.                                      |
 | `restarting` | Waiting for the next configured retry. No process or PID is active.                           |
-| `failed`     | Exited unsuccessfully with no eligible retry, exhausted its retries, or one of its hooks failed. |
+| `failed`     | Exited unsuccessfully with no eligible retry, exhausted its retries, never registered during `up` or a restart, or one of its hooks failed. `last_error` says why. |
 | `stopped`    | Stopped by the daemon, or exited successfully without an eligible restart.                    |
 
 ### Listing processes
