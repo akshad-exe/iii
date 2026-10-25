@@ -231,16 +231,18 @@ pub enum Reconciliation {
     /// A live PID that is not provably the recorded process — a recycled PID, or
     /// a platform that cannot fingerprint. Never signalled; reported instead.
     Unverifiable,
-    /// This daemon stopped it on purpose and recorded that: nothing to adopt,
-    /// nothing to report. `down` leaves the record behind and `restart`
-    /// re-opens the project right after it.
+    /// This daemon stopped it on purpose, or recorded it as failed and why:
+    /// nothing to adopt, nothing to report. `down` leaves the record behind and
+    /// `restart` re-opens the project right after it.
     Stopped,
 }
 
 /// Read-only: inspects the recorded child and returns what to do. Signals
 /// nothing, kills nothing.
 pub fn reconcile(record: &ChildRecord) -> Reconciliation {
-    if record.status == ChildStatus::Stopped {
+    // A failed record was not running when it was saved, and its last_error
+    // already says why; re-checking it would replace that with "exited".
+    if matches!(record.status, ChildStatus::Stopped | ChildStatus::Failed) {
         return Reconciliation::Stopped;
     }
     // No process: a VM container, which only its adapter can answer for.
@@ -428,6 +430,41 @@ mod reconcile_tests {
         // Anything else still goes through the liveness check.
         let failed = ChildRecord::new(u32::MAX - 7, BirthIdentity::Unavailable, ChildStatus::Ready);
         assert_eq!(reconcile(&failed), Reconciliation::Gone);
+    }
+
+    #[test]
+    fn a_failed_record_keeps_its_error_across_a_restart() {
+        // A start that never registered: no process, no VM.
+        let never_ran = ChildRecord {
+            pid: None,
+            birth: None,
+            vm: None,
+            status: ChildStatus::Failed,
+            started_at: 1,
+            last_error: Some("container 'mailer' was not ready after 2s".into()),
+        };
+        assert_eq!(reconcile(&never_ran), Reconciliation::Stopped);
+        // A restart that failed reuses the stopped record, dead pid and all.
+        let restarted = ChildRecord {
+            last_error: never_ran.last_error.clone(),
+            ..ChildRecord::new(
+                u32::MAX - 7,
+                BirthIdentity::Unavailable,
+                ChildStatus::Failed,
+            )
+        };
+        assert_eq!(reconcile(&restarted), Reconciliation::Stopped);
+        // Stopped is also what keeps a failed VM's record from its adapter.
+        let vm = ChildRecord {
+            vm: Some(super::VmRecord {
+                adapter: "sandbox-builtin".into(),
+                namespace: "app".into(),
+                vm_id: "ab".into(),
+                instance: 2,
+            }),
+            ..never_ran
+        };
+        assert_eq!(reconcile(&vm), Reconciliation::Stopped);
     }
 
     #[test]

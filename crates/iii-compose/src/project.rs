@@ -788,11 +788,12 @@ impl Project {
             .collect();
 
         for (key, record) in recorded {
-            // Only its adapter can answer for a VM.
+            // Only its adapter can answer for a VM that the record says may
+            // still run.
             let vm = record
                 .vm
                 .clone()
-                .filter(|_| record.status != ChildStatus::Stopped);
+                .filter(|_| reconcile(&record) != Reconciliation::Stopped);
             let verdict = match &vm {
                 Some(vm) => crate::sandbox::vm_reconciliation(
                     owner_alive,
