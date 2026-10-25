@@ -671,7 +671,15 @@ async fn restart_one_scoped(
                 error.code(),
                 &strip_container_prefix(&error.to_string(), key),
             );
-            record_start_failure(records, key, &error);
+            if retry.is_some() {
+                // A supervisor attempt: it retries, or marks the container
+                // Failed only after its dependents are down.
+                if let Some(record) = records.get_mut(key) {
+                    record.last_error = Some(error.to_string());
+                }
+            } else {
+                record_start_failure(records, key, &error);
+            }
             report::plan_done();
             let required = is_required(ctx.file, key);
             if required {
