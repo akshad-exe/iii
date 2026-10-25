@@ -138,9 +138,17 @@ on [Sandboxes](../creating-workers/sandboxes).
 set it. Nothing reads these directories now, so delete them. The first boot of each VM in 0.26
 starts from fresh state and reinstalls its dependencies.
 
-`iii-worker` also left `~/.iii/managed/`, and older releases left `~/.iii/rootfs/` and
-`~/.iii/images/`. `sandbox-builtin` reads none of them, so delete them too. It keeps pulled images
-in `~/.iii/cache/`, where 0.25 put them, so those are not pulled again.
+`iii-worker` also left the paths below. `sandbox-builtin` reads none of them, so delete them too:
+
+- `~/.iii/managed/`, the state of each VM worker it ran.
+- `~/.iii/workers/` and `~/.iii/workers-bundle/`, the binary and bundle workers it installed.
+- `~/.iii/cache/bundles/`, the bundle archives it downloaded.
+- `~/.iii/logs/` and `~/.iii/pids/`, its worker logs and PID files.
+- `~/.iii/lib/iii-init`.
+- `~/.iii/rootfs/` and `~/.iii/images/`, left by releases before 0.25.
+
+Keep the rest of `~/.iii/lib/`: `sandbox-builtin` still loads `libkrunfw` from there. Keep the rest
+of `~/.iii/cache/` too. It holds pulled images, where 0.25 put them, so those are not pulled again.
 
 The state is now in `~/.iii/sandbox/workers/<vm_id>/`, owned by the adapter. Compose deletes it
 when you remove the VM container. Two cases leave it behind for you to delete by hand:
