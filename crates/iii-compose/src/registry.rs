@@ -626,10 +626,9 @@ fn artifact_for_target<'a>(
 ///
 /// Unix only, because starting one is: see [`ComposeError::BundleNeedsAVm`].
 ///
-/// The install is compose's own, not the machine-wide `~/.iii/workers-bundle/`
-/// that `iii add` keeps. That one is keyed by name alone and is replaced on
-/// every install, so two compose projects pinning different versions of the
-/// same bundle would overwrite each other between one `up` and the next.
+/// The install is keyed by name, version and digest under Compose's package
+/// cache, so two projects pinning different versions of the same bundle never
+/// overwrite each other between one `up` and the next.
 #[cfg(unix)]
 async fn install_bundle(
     container: &str,
