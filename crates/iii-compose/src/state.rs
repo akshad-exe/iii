@@ -241,8 +241,9 @@ pub enum Reconciliation {
 /// nothing, kills nothing.
 pub fn reconcile(record: &ChildRecord) -> Reconciliation {
     // A failed record's last_error already says why; re-checking it would
-    // replace that with "exited". The one failed record that may still run,
-    // an unverifiable pid, is never signalled anyway.
+    // replace that with "exited". A failed record can still be running (an
+    // unverifiable pid, or a VM whose worker::stop got no answer); reading it
+    // as stopped never signals it, and its adapter still owns the VM.
     if matches!(record.status, ChildStatus::Stopped | ChildStatus::Failed) {
         return Reconciliation::Stopped;
     }
