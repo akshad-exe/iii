@@ -1677,6 +1677,58 @@ pub(crate) mod tests {
         );
     }
 
+    /// A restarted daemon does not ask the adapter about a failed VM, so its
+    /// "exited" answer cannot replace the recorded error.
+    #[tokio::test]
+    async fn a_failed_vm_keeps_its_error_across_a_daemon_restart() {
+        use crate::state::{ChildRecord, ChildStatus, DaemonState, Owner, StateStore};
+
+        let (url, mut called) =
+            fake_engine_url(|_, _| answered(status(State::Exited, Some(1), None))).await;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("worker-compose.yaml");
+        std::fs::write(
+            &path,
+            "containers:\n  vm:\n    worker: path://.\n    scripts: { run: sleep 60 }\n",
+        )
+        .unwrap();
+        let file = ComposeFile::load(&path).unwrap();
+        let namespace = format!("failed-vm-{}", uuid::Uuid::new_v4());
+        let store = StateStore::for_project(&namespace, &file.path).unwrap();
+        let error = "container 'vm' was not ready after 2s";
+        let mut state = DaemonState::new(&file.path, "default");
+        state.owner = Some(Owner::current());
+        state.containers.insert(
+            "vm".into(),
+            ChildRecord {
+                pid: None,
+                birth: None,
+                vm: Some(vm_record()),
+                status: ChildStatus::Failed,
+                started_at: 1,
+                last_error: Some(error.into()),
+            },
+        );
+        store.save(&state).unwrap();
+
+        crate::project::Project::open(
+            &namespace,
+            "default".into(),
+            file,
+            std::sync::Arc::new(EngineClient::connect(&url, "t", "t")),
+            url.clone(),
+        )
+        .await
+        .unwrap();
+
+        let vm = &store.load().unwrap().unwrap().containers["vm"];
+        assert_eq!(
+            (vm.status, vm.last_error.as_deref()),
+            (ChildStatus::Failed, Some(error))
+        );
+        assert!(drain(&mut called).is_empty());
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn a_vm_goes_with_an_adapter_container_that_is_not_running() {

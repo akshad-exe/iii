@@ -855,8 +855,9 @@ impl Project {
                         }
                     }
                 }
-                // Stopped by this daemon and recorded as such: the expected
-                // state after `down`, not an anomaly worth a line.
+                // Stopped by this daemon, or failed with its last_error saved:
+                // the expected state after `down` or a failure, not an anomaly
+                // worth a line.
                 (Reconciliation::Stopped, ..) => {}
                 (Reconciliation::Unverifiable, Some(pid), ..) => {
                     // Never signalled: the pid is alive but unproven.
