@@ -73,6 +73,9 @@ Check out [iii.dev/docs](https://iii.dev/docs) to get started building with iii.
 
 ## Docker
 
+Run these from `engine/`, where `config.yaml` and the compose files live. From the repository root,
+hand compose the file explicitly: `docker compose -f engine/docker-compose.yml up -d`.
+
 ```bash
 docker pull iiidev/iii:latest
 
@@ -80,6 +83,9 @@ docker run -p 3111:3111 -p 49134:49134 \
   -v ./config.yaml:/app/config.yaml:ro \
   iiidev/iii:latest
 ```
+
+The image runs the engine only. `49134` is the SDK socket; `3111` stays closed until a project adds
+the `http` worker, which a bare container does not start.
 
 The `docker run` commands below mount a `config.yaml` from the current directory. If you mount the
 repository's `engine/config.yaml`, it enables the deprecated `iii-stream` worker with
