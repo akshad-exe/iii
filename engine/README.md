@@ -81,8 +81,8 @@ docker run -p 3111:3111 -p 49134:49134 \
   iiidev/iii:latest
 ```
 
-Both commands mount a `config.yaml` from the current directory. If you mount the repository's
-`engine/config.yaml`, it enables the deprecated `iii-stream` worker with
+The `docker run` commands below mount a `config.yaml` from the current directory. If you mount the
+repository's `engine/config.yaml`, it enables the deprecated `iii-stream` worker with
 `redis://localhost:6379`, so the container also needs a reachable Redis: put both on one Docker
 network and set `redis_url` to the Redis service name, or drop the `iii-stream` entry.
 
