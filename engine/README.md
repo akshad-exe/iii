@@ -86,6 +86,10 @@ repository's `engine/config.yaml`, it enables the deprecated `iii-stream` worker
 `redis://localhost:6379`, so the container also needs a reachable Redis: put both on one Docker
 network and set `redis_url` to the Redis service name, or drop the `iii-stream` entry.
 
+That config also pins `iii-stream` to `host: 127.0.0.1`, so the published `3112` port is not
+reachable from outside the container. Change it to `0.0.0.0` to use the stream API through Docker,
+or stop publishing `3112`.
+
 ### Production Example
 
 ```bash
