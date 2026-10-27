@@ -59,7 +59,9 @@ worker on `http://localhost:3111`; add it the same way with
 `iii trigger compose::add worker=http`.
 
 `compose::add` is served by the Compose daemon, not by the engine, so both commands need one
-running: start it with `iii compose --up`, or pass `-n <namespace>` to reach an existing daemon.
+running: start it with `iii compose` in another terminal, or pass `-n <namespace>` to reach an
+existing daemon. Not `iii compose --up` here — that also starts the engine declared in
+`worker-compose.yaml`, and this section has already started one on the same endpoint.
 
 Check out [iii.dev/docs](https://iii.dev/docs) to get started building with iii.
 
