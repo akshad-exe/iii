@@ -36,11 +36,11 @@ command -v iii && iii --version
 ## Start the engine
 
 ```bash
-iii --use-default-config
+iii
 ```
 
-This starts the engine with the built-in modules and an in-memory OpenTelemetry configuration, so
-traces, metrics, and logs are available without creating `config.yaml` first.
+With no `config.yaml` in the working directory, this offers to create one and then starts the
+engine. Headless runs, such as a container or a CI job, create it without prompting.
 
 For a project-backed setup, create `config.yaml` in your working directory, or run
 `iii --config /path/to/config.yaml`.
