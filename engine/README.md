@@ -54,7 +54,9 @@ Open the console: add the ADE worker to your project, then open `http://127.0.0.
 iii trigger compose::add worker=ade
 ```
 
-Your engine is running at `ws://localhost:49134` with HTTP API at `http://localhost:3111`.
+Your engine is running at `ws://localhost:49134`. Project HTTP routes are served by the `http`
+worker on `http://localhost:3111`; add it to a project with
+`iii trigger compose::add worker=http`.
 
 Check out [iii.dev/docs](https://iii.dev/docs) to get started building with iii.
 
@@ -72,7 +74,7 @@ Check out [iii.dev/docs](https://iii.dev/docs) to get started building with iii.
 docker pull iiidev/iii:latest
 
 docker run -p 3111:3111 -p 49134:49134 \
-  -v ./iii-config.yaml:/app/iii-config.yaml:ro \
+  -v ./config.yaml:/app/config.yaml:ro \
   iiidev/iii:latest
 ```
 
@@ -82,7 +84,7 @@ docker run -p 3111:3111 -p 49134:49134 \
 docker run --read-only --tmpfs /tmp \
   --cap-drop=ALL --cap-add=NET_BIND_SERVICE \
   --security-opt=no-new-privileges:true \
-  -v ./iii-config.yaml:/app/iii-config.yaml:ro \
+  -v ./config.yaml:/app/config.yaml:ro \
   -p 3111:3111 -p 49134:49134 -p 3112:3112 -p 9464:9464 \
   iiidev/iii:latest
 ```
@@ -104,17 +106,23 @@ configuration.
 
 ## Ports
 
-| Port  | Service                        |
-| ----- | ------------------------------ |
-| 49134 | WebSocket (worker connections) |
-| 3111  | HTTP API                       |
-| 3112  | Stream API                     |
-| 9464  | Prometheus metrics             |
+| Port  | Service                            | Bound by                   |
+| ----- | ---------------------------------- | -------------------------- |
+| 49134 | SDK WebSocket (worker connections) | engine                     |
+| 3111  | Project HTTP routes                | `http` worker              |
+| 3112  | Stream API (deprecated)            | engine (`iii-stream`)      |
+| 3113  | Console UI and `/ws` proxy         | `ade` worker               |
+| 9464  | Prometheus metrics                 | `iii-observability` worker |
+
+The engine process itself binds the SDK WebSocket, the deprecated stream listener, and nothing else.
+The other surfaces belong to workers, either engine-owned (`iii-stream`) or Compose-declared; see the
+[engine protocol reference](https://iii.dev/docs/reference/engine-protocol) for the canonical table.
 
 ## Configuration
 
-Visit [iii.dev/docs](https://iii.dev/docs) to learn how to
-[configure the engine](https://iii.dev/docs/how-to/configure-engine)
+See [Engine](https://iii.dev/docs/using-iii/engine) for startup and engine-owned worker
+configuration, and [Configuration](https://iii.dev/docs/using-iii/configuration) for per-worker
+settings.
 
 ## Protocol Summary
 
@@ -122,22 +130,29 @@ The engine speaks JSON messages over WebSocket. Key message types: `registerfunc
 `invokefunction`, `invocationresult`, `registertrigger`, `unregistertrigger`,
 `triggerregistrationresult`, `registerservice`, `functionsavailable`, `ping`, `pong`.
 
-Invocations can be fire-and-forget by omitting `invocation_id`.
+Invocations can be fire-and-forget by omitting `invocation_id`. Observers (`iii.observe`) added
+`Observe` and `Unobserve` frames in 0.25. The [engine protocol
+reference](https://iii.dev/docs/reference/engine-protocol) is the canonical message list.
 
 ## Repository Layout
 
 - `src/main.rs` – CLI entrypoint (`iii` binary)
-- `src/engine/` – Worker management, routing, and invocation lifecycle
+- `src/cli/` – CLI subcommands (`compose`, `trigger`, `project`, `cloud`, `update`)
+- `src/engine/` – Worker registry, routing, and invocation lifecycle
+- `src/invocation/` – Invocation state and result handling
+- `src/observer/` – Observer registry, filters, and activations
+- `src/workers/` – Engine-owned workers (stream, configuration, http functions, sandbox, worker
+  manager, observability, telemetry) and queue adapters
+- `src/builtins/` – In-process KV, queue, and pub/sub backends
 - `src/protocol.rs` – WebSocket message schema
-- `src/modules/` – Core modules (API, queue, cron, stream, observability, shell)
-- `iii-config.yaml` – Example module configuration
-- `examples/custom_queue_adapter.rs` – Custom module + adapter example
+- `config.yaml` – Example engine and engine-owned worker configuration
+- `examples/custom_queue_adapter.rs` – Custom worker and adapter example
 
 ## Development
 
 ```bash
 cargo run                                # start engine
-cargo run -- --config iii-config.yaml        # with config
+cargo run -- --config config.yaml        # with config
 cargo fmt && cargo clippy -- -D warnings # lint
 make watch                               # watch mode
 ```
@@ -159,6 +174,7 @@ See the [Quickstart guide](https://iii.dev/docs/quickstart) for step-by-step tut
 ## Resources
 
 - [Documentation](https://iii.dev/docs)
+- [Worker registry](https://workers.iii.dev)
 - [CLI & Engine](https://github.com/iii-hq/iii)
 - [Console](https://iii.dev/docs/using-iii/console)
 - [Examples](https://github.com/iii-hq/iii-examples)
