@@ -35,6 +35,7 @@
   <a href="#添加-worker">添加 Worker</a> ·
   <a href="#sdk">SDK</a> ·
   <a href="#面向第三方-harness-的-agent-skills">Agent Skills</a> ·
+  <a href="#控制台-ade">Console</a> ·
   <a href="#资源">资源</a>
 </p>
 
