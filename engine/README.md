@@ -55,8 +55,11 @@ iii trigger compose::add worker=ade
 ```
 
 Your engine is running at `ws://localhost:49134`. Project HTTP routes are served by the `http`
-worker on `http://localhost:3111`; add it to a project with
+worker on `http://localhost:3111`; add it the same way with
 `iii trigger compose::add worker=http`.
+
+`compose::add` is served by the Compose daemon, not by the engine, so both commands need one
+running: start it with `iii compose --up`, or pass `-n <namespace>` to reach an existing daemon.
 
 Check out [iii.dev/docs](https://iii.dev/docs) to get started building with iii.
 
@@ -78,6 +81,11 @@ docker run -p 3111:3111 -p 49134:49134 \
   iiidev/iii:latest
 ```
 
+Both commands mount a `config.yaml` from the current directory. If you mount the repository's
+`engine/config.yaml`, it enables the deprecated `iii-stream` worker with
+`redis://localhost:6379`, so the container also needs a reachable Redis: put both on one Docker
+network and set `redis_url` to the Redis service name, or drop the `iii-stream` entry.
+
 ### Production Example
 
 ```bash
@@ -85,9 +93,15 @@ docker run --read-only --tmpfs /tmp \
   --cap-drop=ALL --cap-add=NET_BIND_SERVICE \
   --security-opt=no-new-privileges:true \
   -v ./config.yaml:/app/config.yaml:ro \
+  -v /app/config -v /app/data \
   -p 3111:3111 -p 49134:49134 -p 3112:3112 -p 9464:9464 \
   iiidev/iii:latest
 ```
+
+`/app/config` and `/app/data` stay writable through anonymous volumes, which inherit the image's
+`65532` ownership: the `configuration` worker stores one YAML per entry under `/app/config` and
+observability traces default to `/app/data`. They last as long as the container; use named volumes
+or host paths when they should survive a recreate.
 
 ### Docker Compose (full stack with Redis + RabbitMQ):
 
@@ -115,7 +129,8 @@ configuration.
 | 9464  | Prometheus metrics                 | `iii-observability` worker |
 
 The engine process itself binds the SDK WebSocket, the deprecated stream listener, and nothing else.
-The other surfaces belong to workers, either engine-owned (`iii-stream`) or Compose-declared; see the
+The other surfaces belong to workers: engine-owned (`iii-stream`), injected automatically
+(`iii-observability`, `iii-telemetry`, `iii-engine-functions`), or Compose-declared. See the
 [engine protocol reference](https://iii.dev/docs/reference/engine-protocol) for the canonical table.
 
 ## Configuration
