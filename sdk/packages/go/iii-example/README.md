@@ -13,8 +13,9 @@ the socket, then serves until interrupted so the trigger can be called over HTTP
 # 1. Start the engine in another terminal
 iii                                    # SDK socket on ws://localhost:49134
 
-# 2. Start the Compose daemon in a third terminal and add the http worker, which is
-#    what serves :3111. The engine itself only speaks WebSocket.
+# 2. From this directory, start the Compose daemon in a third terminal and add the
+#    http worker, which serves :3111. The included worker-compose.yaml connects the
+#    daemon to the engine; the engine itself only speaks WebSocket.
 iii compose
 iii trigger compose::add worker=http
 
@@ -28,4 +29,4 @@ curl -X POST localhost:3111/greet -H 'Content-Type: application/json' -d '{"name
 ```
 
 `http` is a Compose worker, not part of the engine, so step 2 adds it explicitly. Set `III_URL`
-to point at a non-default engine endpoint.
+and update `worker-compose.yaml` to point at a non-default engine endpoint.
